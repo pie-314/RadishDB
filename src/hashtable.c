@@ -16,12 +16,54 @@ HashTable *ht_create(int size) {
   }
   return ht;
 }
+void ht_resize(HashTable *ht_old, int new_size) {
+  HashTable *ht_new = malloc(sizeof(HashTable));
+  ht_new->size = new_size;
+  ht_new->count = 0;
+  ht_new->buckets = malloc(new_size * sizeof(Entry *));
+
+  for (int i = 0; i < new_size; i++) {
+    ht_new->buckets[i] = NULL;
+  }
+
+  // rehash all entries
+  for (int i = 0; i < ht_old->size; i++) {
+    Entry *entry = ht_old->buckets[i];
+    while (entry != NULL) {
+      Entry *next_entry = entry->next;
+
+      unsigned long h = hash(entry->key);
+      int new_index = h % ht_new->size;
+
+      entry->next = ht_new->buckets[new_index];
+      ht_new->buckets[new_index] = entry;
+      ht_new->count++;
+
+      entry = next_entry;
+    }
+  }
+
+  free(ht_old->buckets);
+
+  ht_old->buckets = ht_new->buckets;
+  ht_old->size = ht_new->size;
+  ht_old->count = ht_new->count;
+
+  free(ht_new);
+}
 
 void ht_set(HashTable *ht, const char *key, const char *value) {
-  unsigned long h = hash(key);
-  int index = (int)(h % ht->size);
-  Entry *entry = ht->buckets[index]; // head of the linked list for that bucket
 
+  // resizing check
+  float load = (float)ht->count / ht->size;
+  if (load > 0.75f) {
+    ht_resize(ht, ht->size * 2);
+  }
+
+  unsigned long h = hash(key);
+  int index = h % ht->size;
+
+  Entry *entry = ht->buckets[index];
   while (entry != NULL) {
     if (strcmp(entry->key, key) == 0) {
       free(entry->value);
@@ -34,9 +76,11 @@ void ht_set(HashTable *ht, const char *key, const char *value) {
   Entry *new_entry = malloc(sizeof(Entry));
   if (!new_entry)
     return;
+
   new_entry->key = strdup(key);
   new_entry->value = strdup(value);
   new_entry->next = ht->buckets[index];
+
   ht->buckets[index] = new_entry;
   ht->count++;
 }

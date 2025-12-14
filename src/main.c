@@ -49,6 +49,25 @@ int main() {
       ht_set(ht, argv[1], argv[2]);
     }
 
+    else if (strcmp(argv[0], "BENCH") == 0 && argc == 2) {
+
+      int n = atoi(argv[1]);
+      if (n <= 0) {
+        printf("Invalid number.\n");
+        continue;
+      }
+
+      for (int i = 0; i < n; i++) {
+        char key[64];
+        char value[64];
+        sprintf(key, "key%d", i);
+        sprintf(value, "val%d", i);
+        ht_set(ht, key, value);
+      }
+
+      printf("Inserted %d entries.\n", n);
+    }
+
     else if (strcmp(argv[0], "DEL") == 0) {
       int value = ht_delete(ht, argv[1]);
       if (value)
@@ -69,7 +88,9 @@ int main() {
       break;
     }
 
-    else {
+    else if (strcmp(argv[0], "COUNT") == 0) {
+      printf("%d\n", ht->count);
+    } else {
       printf("Unknown command. \n");
     }
   }
