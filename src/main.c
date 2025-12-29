@@ -1,8 +1,8 @@
 #include "hashtable.h"
+#include "persistence.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #define MAX_INPUT 256
 #define MAX_TOKEN 8
 
@@ -24,7 +24,7 @@ int split_tokens(char *line, char *argv[], int max) {
 }
 
 int main() {
-  HashTable *ht = ht_create(8);
+  HashTable *ht = ht_create(MAX_TOKEN);
 
   char input[MAX_INPUT];
 
@@ -86,6 +86,24 @@ int main() {
 
     else if (strcmp(argv[0], "EXIT") == 0) {
       break;
+    }
+
+    else if (strcmp(argv[0], "SAVE") == 0) {
+      char *value = strcat(argv[1], ".rdbx");
+      if (value) {
+        ht_save(ht, value);
+        printf("FILE SAVED : %s\n", value);
+      } else
+        printf("(nil)\n");
+    }
+
+    else if (strcmp(argv[0], "LOAD") == 0) {
+      char *value = argv[1];
+      if (value) {
+        ht_load(ht, value);
+        printf("FILE LOADED : %s\n", value);
+      } else
+        printf("(nil)\n");
     }
 
     else if (strcmp(argv[0], "COUNT") == 0) {

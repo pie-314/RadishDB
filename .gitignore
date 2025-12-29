@@ -1,0 +1,18 @@
+# Compiled binaries
+*.o
+*.out
+*.exe
+*.a
+
+# Build outputs
+hashtable
+radishdb
+build/
+
+# Debug files
+*.gch
+*.log
+
+# macOS / Linux junk
+.DS_Store
+

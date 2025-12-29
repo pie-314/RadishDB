@@ -1,4 +1,7 @@
+#ifndef HASHTABLE_H
+#define HASHTABLE_H
 
+#define HASHTABLE_H
 typedef struct Entry {
   char *key;
   char *value;
@@ -18,3 +21,5 @@ char *ht_get(HashTable *ht, const char *key);
 int ht_delete(HashTable *ht, const char *key);
 void ht_free(HashTable *ht);
 void ht_resize(HashTable *ht, int new_size);
+
+#endif

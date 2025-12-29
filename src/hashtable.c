@@ -16,6 +16,7 @@ HashTable *ht_create(int size) {
   }
   return ht;
 }
+
 void ht_resize(HashTable *ht_old, int new_size) {
   HashTable *ht_new = malloc(sizeof(HashTable));
   ht_new->size = new_size;
@@ -102,7 +103,6 @@ char *ht_get(HashTable *ht, const char *key) {
 int ht_delete(HashTable *ht, const char *key) {
   unsigned long h = hash(key);
   int index = (int)(h % ht->size);
-  int flag;
 
   Entry *entry = ht->buckets[index];
   Entry *prev = NULL;
