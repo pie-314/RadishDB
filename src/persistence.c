@@ -36,14 +36,15 @@ int ht_save(HashTable *ht, const char *filename) {
 int ht_load(HashTable *ht, const char *filename) {
   FILE *f = fopen(filename, "rb");
   if (!f)
-    return 0;
+    return RDB_ERR_OPEN;
+
   char magic[6];
   fread(magic, 1, 5, f);
   magic[5] = '\0';
 
   if (strcmp(magic, "RDBX1") != 0) {
     fclose(f);
-    return 0;
+    return RDB_ERR_MAGIC;
   }
 
   ht_free(ht);
@@ -74,5 +75,5 @@ int ht_load(HashTable *ht, const char *filename) {
     free(value);
   }
   fclose(f);
-  return 1;
+  return RDB_OK;
 }

@@ -10,7 +10,8 @@ TARGET = radishdb
 SRC = \
 	src/main.c \
 	src/hashtable.c \
-	src/persistence.c
+	src/persistence.c \
+	src/aof.c
 
 # Object files (generated automatically)
 OBJ = $(SRC:.c=.o)

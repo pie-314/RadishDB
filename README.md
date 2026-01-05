@@ -1,22 +1,49 @@
 # RadishDB
 
-RadishDB is a lightweight, Redis-inspired in-memory key–value database written in C.  
-It is built from scratch to understand how real databases work internally, with a focus on data structures, memory management, persistence, and system design.
+RadishDB is a lightweight, Redis-inspired **in-memory key–value database** written in C.
 
-The project is educational-first, but follows real database architecture principles.
+It is built from scratch as a **systems learning project**, with a focus on:
+
+* data structures
+* manual memory management
+* persistence mechanisms
+* crash recovery
+* clean modular design
+
+While educational-first, RadishDB intentionally follows **real database architecture patterns** rather than toy abstractions.
 
 ---
 
-## Features
+## Current Features
 
-- Key–value store (string to string)
-- Hash table with separate chaining for collision handling
-- Automatic resizing based on load factor
-- Safe insertion, update, and deletion
-- Interactive command-line REPL
-- Built-in benchmarking command
-- Binary persistence using a custom snapshot format (`.rdbx`)
-- Clean separation between in-memory logic and persistence layer
+### Core storage
+
+* String → string key–value store
+* Hash table with **separate chaining**
+* Automatic resizing based on load factor
+* Safe insertion, update, and deletion
+* Heap-managed keys and values
+
+### REPL
+
+* Interactive command-line interface
+* Deterministic command parsing
+* Clear error handling
+* Non-blocking prompt behavior
+
+### Persistence
+
+* **Binary snapshot format** (`.rdbx`)
+* **Append-Only File (AOF)** for crash recovery
+* AOF replay on startup
+* Length-prefixed binary encoding
+* Versioned file header with magic bytes
+
+### Tooling
+
+* Built-in benchmarking (`BENCH`)
+* Compatible with Valgrind and AddressSanitizer
+* Clean module separation (`hashtable`, `persistence`, `aof`, `utils`)
 
 ---
 
@@ -24,48 +51,59 @@ The project is educational-first, but follows real database architecture princip
 
 RadishDB is built around a dynamically resizing hash table:
 
-- Buckets are implemented as linked lists
-- Load factor threshold is 0.75
-- Rehashing redistributes all entries during resize
-- Keys and values are heap-allocated strings
-- Persistence serializes raw key/value bytes using length-prefix encoding
+* Buckets are implemented as linked lists
+* Load factor threshold: **0.75**
+* Rehashing redistributes all entries during resize
+* Keys and values are heap-allocated (`malloc` / `free`)
+* Collision handling via chaining
 
-The persistence format is binary, versioned, and self-identifying via a magic header.
+Persistence is layered on top of the in-memory engine:
+
+1. **Snapshot (.rdbx)**
+
+   * Fast full-state save/load
+   * Used for compact persistence
+
+2. **Append-Only File (AOF)**
+
+   * Logs write operations (`SET`, `DEL`)
+   * Flushed after each write for crash safety
+   * Replayed on startup to reconstruct state
+
+Replay is deterministic and silent, following WAL principles.
 
 ---
 
 ## Project Structure
 
 ```
-
 src/
-├── main.c           # REPL and command handling
-├── hashtable.c      # Core hash table implementation
+├── main.c           # REPL and command dispatch
+├── hashtable.c      # Core hash table logic
 ├── hashtable.h
-├── persistence.c    # SAVE / LOAD (.rdbx format)
+├── persistence.c    # Snapshot save/load (.rdbx)
 ├── persistence.h
+├── aof.c            # Append-only file + replay
+├── aof.h
+├── utils.c          # Shared helpers (tokenizing, trimming)
+├── utils.h
 └── Makefile
-
 ```
 
 ---
 
 ## Building
 
-Requires a C compiler such as GCC or Clang.
+Requires a C compiler (GCC or Clang).
 
-```
-
+```sh
 make
-
 ```
 
 Run the database:
 
-```
-
+```sh
 ./radishdb
-
 ```
 
 ---
@@ -74,112 +112,129 @@ Run the database:
 
 ### Basic operations
 
-```
-
+```text
 SET key value
 GET key
 DEL key
-
+COUNT
 ```
 
 ### Benchmarking
 
-```
-
+```text
 BENCH 10000
-
 ```
 
-Inserts 10,000 generated key–value pairs (`key0 → val0`, etc.) to test performance and resizing.
+Inserts 10,000 generated key–value pairs (`key0 → value0`, etc.)
+Used to test resizing and insertion performance.
 
 ### Persistence
 
-```
-
+```text
 SAVE filename
 LOAD filename
-
 ```
 
-RadishDB snapshot files use the `.rdbx` extension.
+* Snapshot files use the `.rdbx` extension
+* AOF is maintained automatically
 
 ---
 
-## `.rdbx` File Format
+## `.rdbx` Snapshot Format
 
-Each snapshot file has the following binary layout:
+Binary layout:
 
 ```
-
-[RDBX1]           // magic header + version
-[uint32 count]    // number of entries
+[RDBX1]            // magic header + version
+[uint32 count]     // number of entries
 
 repeat count times:
-[uint32 key_length]
+[uint32 key_len]
 [key bytes]
-[uint32 value_length]
+[uint32 value_len]
 [value bytes]
-
 ```
 
-The magic header ensures file validity before loading.
+The magic header is validated before loading to prevent corrupt reads.
+
+---
+
+## Append-Only File (AOF)
+
+* Text-based command log
+* Commands appended in execution order
+* Flushed after each write (`fflush`)
+* Replayed on startup before opening append mode
+
+Example AOF contents:
+
+```text
+SET name radish
+SET lang c
+DEL temp
+```
+
+AOF replay reconstructs in-memory state deterministically.
 
 ---
 
 ## Example Session
 
-```
-
-> SET name Pi
+```text
+> SET name RadishDB
+OK
 > SET lang c
+OK
 > SAVE data
-> FILE SAVED : data.rdbx
+OK
 
 (restart program)
 
-> LOAD data.rdbx
-> OK
 > GET name
-> Pi
-
+RadishDB
+> COUNT
+2
 ```
 
 ---
 
 ## Safety and Debugging
 
-- Header guards prevent multiple definitions
-- Binary length-prefixing prevents buffer overruns
-- Designed to work with AddressSanitizer and Valgrind
-- Snapshot loader validates file format before loading
+* Header guards prevent duplicate symbols
+* Strict compilation flags (`-Wall -Wextra -Werror`)
+* Designed to be Valgrind- and ASAN-clean
+* Length-prefixed encoding prevents buffer overruns
+* Replay logic is defensive against malformed input
 
 ---
 
 ## Roadmap
 
-Planned improvements include:
+Planned next steps (in rough order):
 
-- Clear-vs-merge behavior on LOAD
-- Key expiry (TTL)
-- Append-only file (AOF)
-- TCP networking
-- RESP protocol compatibility
-- Event-driven concurrency
-- Compression and checksums
+* TTL / key expiry
+* AOF rewrite / compaction
+* Snapshot + AOF interaction rules
+* Improved introspection (`INFO`, stats)
+* Networking (single-threaded TCP)
+* RESP-like protocol
+* Background persistence
+* Optional durability policies (`fsync` modes)
 
 ---
 
 ## Motivation
 
-RadishDB exists to deeply understand:
+RadishDB exists to **understand how real databases are built**, not to compete with Redis.
 
-- Hash tables and resizing
-- Manual memory management in C
-- Binary serialization
-- Persistence mechanisms
-- Database design trade-offs
+The project explores:
 
-It is not intended to replace Redis, but to learn how Redis-like systems are built.
+* hash table internals
+* memory ownership in C
+* persistence trade-offs
+* write-ahead logging
+* crash recovery semantics
+* clean module boundaries
 
 ---
 
@@ -191,5 +246,5 @@ MIT License.
 
 ## Author
 
-Built as a learning-focused systems project.
+Built as a systems-learning project to explore database internals in C.
 
