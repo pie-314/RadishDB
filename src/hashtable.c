@@ -1,6 +1,7 @@
 #include "hashtable.h"
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 HashTable *ht_create(int size) {
   HashTable *ht =
@@ -53,8 +54,8 @@ void ht_resize(HashTable *ht_old, int new_size) {
   free(ht_new);
 }
 
-void ht_set(HashTable *ht, const char *key, const char *value) {
-
+void ht_set(HashTable *ht, const char *key, const char *value,
+            time_t expires_at) {
   // resizing check
   float load = (float)ht->count / ht->size;
   if (load > 0.75f) {
@@ -69,6 +70,7 @@ void ht_set(HashTable *ht, const char *key, const char *value) {
     if (strcmp(entry->key, key) == 0) {
       free(entry->value);
       entry->value = strdup(value);
+      entry->expires_at = expires_at;
       return;
     }
     entry = entry->next;
@@ -80,6 +82,7 @@ void ht_set(HashTable *ht, const char *key, const char *value) {
 
   new_entry->key = strdup(key);
   new_entry->value = strdup(value);
+  new_entry->expires_at = expires_at;
   new_entry->next = ht->buckets[index];
 
   ht->buckets[index] = new_entry;
@@ -90,14 +93,41 @@ char *ht_get(HashTable *ht, const char *key) {
   unsigned long h = hash(key);
   int index = h % ht->size;
 
+  time_t cur_time = time(NULL);
   Entry *entry = ht->buckets[index];
   while (entry != NULL) {
     if (strcmp(entry->key, key) == 0) {
+      if (cur_time >= entry->expires_at && entry->expires_at != 0) {
+        ht_delete(ht, key);
+        return NULL;
+      }
       return entry->value;
     }
     entry = entry->next;
   }
   return NULL;
+}
+
+long ht_ttl(HashTable *ht, const char *key) {
+  unsigned long h = hash(key);
+  int index = h % ht->size;
+
+  time_t cur_time = time(NULL);
+  Entry *entry = ht->buckets[index];
+
+  while (entry != NULL) {
+    if (strcmp(entry->key, key) == 0) {
+      if (cur_time >= entry->expires_at && entry->expires_at != 0) {
+        ht_delete(ht, key);
+        return -2;
+      } else if (entry->expires_at == 0) {
+        return -1;
+      }
+      return entry->expires_at - cur_time;
+    }
+    entry = entry->next;
+  }
+  return -2;
 }
 
 int ht_delete(HashTable *ht, const char *key) {

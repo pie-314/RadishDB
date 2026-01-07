@@ -1,9 +1,8 @@
 #include "aof.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
 static FILE *aof_file = NULL;
-static FILE *aof_read = NULL;
 
 // just to open aof file
 int aof_open(const char *filename) {
@@ -14,8 +13,8 @@ int aof_open(const char *filename) {
 }
 
 // append value to file
-int aof_append_set(const char *key, const char *value) {
-  if (fprintf(aof_file, "SET %s %s\n", key, value) >= 0) {
+int aof_append_set(const char *key, const char *value, const char *expire_at) {
+  if (fprintf(aof_file, "SET %s %s EX %s\n", key, value, expire_at) >= 0) {
     fflush(aof_file);
     return 1;
   } else {
@@ -33,6 +32,7 @@ int aof_append_del(const char *key) {
   }
 }
 
+// aof replay
 int aof_replay(HashTable *ht, const char *filename) {
   FILE *f = fopen(filename, "r");
 
@@ -46,28 +46,33 @@ int aof_replay(HashTable *ht, const char *filename) {
   while (fgets(buffer, sizeof(buffer), f)) {
     trim_newline(buffer);
 
-    char *argv[3];
-    int argc = split_tokens(buffer, argv, 3);
+    char *argv[5];
+    int argc = split_tokens(buffer, argv, 5);
 
     if (argc == 0) {
       continue;
     }
 
-    if (strcmp(argv[0], "SET") == 0) {
-      if (argc == 3) {
-        ht_set(ht, argv[1], argv[2]);
+    if (strcmp(argv[0], "SET") == 0 && argc == 3) {
+      ht_set(ht, argv[1], argv[2], 0);
+    } else if (strcmp(argv[0], "SET") == 0 && argc == 5 &&
+               strcmp(argv[3], "EX") == 0) {
+
+      long seconds = strtol(argv[4], NULL, 10);
+      if (seconds > 0) {
+        time_t expires_at = time(NULL) + seconds;
+        ht_set(ht, argv[1], argv[2], expires_at);
       }
-    } else if (strcmp(argv[0], "DEL") == 0) {
-      if (argc == 2) {
-        ht_delete(ht, argv[1]);
-      }
+    } else if (strcmp(argv[0], "DEL") == 0 && argc == 2) {
+      ht_delete(ht, argv[1]);
     }
-    // Unknown or malformed lines are ignored safely
+    // malformed lines are safely ignored
   }
 
   fclose(f);
   return 1;
 }
+
 // close aof file
 void aof_close(void) {
   if (aof_file) {

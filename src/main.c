@@ -1,6 +1,7 @@
 #include "aof.h"
 #include "hashtable.h"
 #include "persistence.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,6 +32,7 @@ int main() {
 
   // to clear screen before starting the REPL
   system("clear");
+
   aof_open("aof/aof.txt");
   aof_replay(ht, "aof/aof.txt");
 
@@ -50,13 +52,23 @@ int main() {
     }
 
     if (strcmp(argv[0], "SET") == 0) {
-      if (argc != 3) {
+      if (argc != 3 && argc != 5) {
         printf("(error) wrong number of arguments for 'SET'\n");
         continue;
       }
-      ht_set(ht, argv[1], argv[2]);
-      aof_append_set(argv[1], argv[2]);
-      printf("OK\n");
+      if (argc == 3) {
+        ht_set(ht, argv[1], argv[2], 0);
+        aof_append_set(argv[1], argv[2], 0);
+        printf("OK\n");
+      } else if (argc == 5 && (strcmp(argv[3], "EX") == 0)) {
+        if (strtol(argv[4], NULL, 10) >= 0) {
+          time_t cur_time = time(NULL);
+          time_t ttl_expiry = cur_time + (long)strtol(argv[4], NULL, 10);
+          ht_set(ht, argv[1], argv[2], ttl_expiry);
+          aof_append_set(argv[1], argv[2], argv[4]);
+          printf("OK\n");
+        }
+      }
     }
 
     else if (strcmp(argv[0], "BENCH") == 0) {
@@ -76,7 +88,7 @@ int main() {
       for (int i = 0; i < n; i++) {
         snprintf(key, sizeof(key), "key%d", i);
         snprintf(value, sizeof(value), "value%d", i);
-        ht_set(ht, key, value);
+        ht_set(ht, key, value, 0);
       }
       clock_gettime(CLOCK_MONOTONIC, &end);
       double elapsed =
@@ -155,6 +167,15 @@ int main() {
 
     else if (strcmp(argv[0], "COUNT") == 0) {
       printf("(integer) %d\n", ht->count);
+    }
+
+    else if (strcmp(argv[0], "TTL") == 0) {
+      if (argc != 2) {
+        printf("(error) wrong number of arguments for 'TTL'\n");
+        continue;
+      }
+      long val = ht_ttl(ht, argv[1]);
+      printf("(staus) %ld\n", val);
     }
 
     else if (strcmp(argv[0], "CLEAR") == 0) {
