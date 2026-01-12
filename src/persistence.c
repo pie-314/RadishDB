@@ -14,7 +14,7 @@ int ht_save(HashTable *ht, const char *filename) {
   uint32_t count = ht->count;
   fwrite(&count, sizeof(uint32_t), 1, f);
 
-  for (int i = 0; i < ht->size; i++) {
+  for (size_t i = 0; i < ht->size; i++) {
     Entry *entry = ht->buckets[i];
 
     while (entry != NULL) {
@@ -25,6 +25,8 @@ int ht_save(HashTable *ht, const char *filename) {
       uint32_t vlen = strlen(entry->value);
       fwrite(&vlen, sizeof(uint32_t), 1, f);
       fwrite(entry->value, 1, vlen, f);
+
+      fwrite(&entry->expires_at, sizeof(time_t), 1, f);
 
       entry = entry->next;
     }
@@ -68,7 +70,10 @@ int ht_load(HashTable *ht, const char *filename) {
     char *value = malloc(vlen + 1);
     fread(value, 1, vlen, f);
     value[vlen] = '\0';
-    ht_set(ht, key, value);
+
+    time_t expires_at;
+    fread(&expires_at, sizeof(time_t), 1, f);
+    ht_set(ht, key, value, expires_at);
 
     // temp heap cleanup
     free(key);

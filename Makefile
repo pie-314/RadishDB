@@ -1,44 +1,45 @@
 # Compiler and flags
 CC      = gcc
 CFLAGS  = -Wall -Wextra -Werror -g
-LDFLAGS =
 
-# Project name
-TARGET = radishdb
+# Project
+TARGET  = radishdb
+BUILD   = build
 
 # Source files
 SRC = \
 	src/main.c \
 	src/hashtable.c \
 	src/persistence.c \
-	src/aof.c
+	src/aof.c \
+	src/expires.c \
+	src/utils.c
 
-# Object files (generated automatically)
-OBJ = $(SRC:.c=.o)
+# Convert src/foo.c -> build/foo.o
+OBJ = $(patsubst src/%.c,$(BUILD)/%.o,$(SRC))
 
 # Default target
 all: $(TARGET)
 
-# Link step
+# Link
 $(TARGET): $(OBJ)
-	$(CC) $(OBJ) -o $(TARGET) $(LDFLAGS)
+	$(CC) $(OBJ) -o $(TARGET)
 
-# Compile each .c into .o
-%.o: %.c
+# Compile rule
+$(BUILD)/%.o: src/%.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Clean build artifacts
+# Ensure build dir exists
+$(BUILD):
+	mkdir -p $(BUILD)
+
+# Clean
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -rf $(BUILD) $(TARGET)
 
-# Deep clean (optional)
-distclean: clean
-	rm -f *.rdbx
-
-# Run with AddressSanitizer (debug target)
+# ASAN build
 asan:
 	$(CC) -fsanitize=address -fno-omit-frame-pointer $(SRC) -o $(TARGET)
 
-# Phony targets
-.PHONY: all clean distclean asan
+.PHONY: all clean asan
 

@@ -1,42 +1,57 @@
 #include "aof.h"
+#include "expires.h"
 #include "hashtable.h"
 #include "persistence.h"
+#include "utils.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
 #define MAX_INPUT 256
 #define MAX_TOKEN 8 // at max 3 is getting used for now
 
-void trim_newline(char *s) {
-  size_t len = strlen(s);
-  if (len > 0 && s[len - 1] == '\n') {
-    s[len - 1] = '\0';
-  }
-}
-
-int split_tokens(char *line, char *argv[], int max) {
-  int count = 0;
-  char *tok = strtok(line, " ");
-  while (tok != NULL && count < max) {
-    argv[count++] = tok;
-    tok = strtok(NULL, " ");
-  }
-  return count;
-}
-
 int main() {
   HashTable *ht = ht_create(8);
+
+  expire_init(ht);
   char input[MAX_INPUT];
 
   // to clear screen before starting the REPL
   system("clear");
 
-  aof_open("aof/aof.txt");
-  aof_replay(ht, "aof/aof.txt");
+  time_t start_time = time(NULL);
+  aof_open("aof/radish.aof");
+  aof_replay(ht, "aof/radish.aof");
+  expire_init(ht);
 
+  // Rewrite AOF if too big
+  size_t aof_base_size = aof_header_filesize("aof/radish.aof");
+
+  // aof_rewrite(ht, "aof/radish.aof");
+  size_t aof_size = aof_filesize("aof/radish.aof");
+
+  if (aof_size > aof_base_size * 2 || aof_base_size == 0) {
+    printf("[AOF] startup rewrite (%zu bytes)\n", aof_size);
+    aof_rewrite(ht, "aof/radish.aof");
+    aof_base_size = aof_header_filesize("aof/radish.aof");
+  }
+
+  system("clear");
+
+  // REPL loop
   while (1) {
+    expire_sweep(ht, 10);
+
+    size_t aof_base_size = aof_header_filesize("aof/radish.aof");
+    aof_size = aof_filesize("aof/radish.aof");
+    if (aof_size > aof_base_size * 2) {
+      printf("[AOF] rewrite (%zu bytes)\n", aof_size);
+      aof_rewrite(ht, "aof/radish.aof");
+      aof_base_size = aof_header_filesize("aof/radish.aof");
+    }
+
     printf(">>> ");
     fflush(stdout);
 
@@ -148,6 +163,7 @@ int main() {
       char *value = argv[1];
       if (value) {
         RdbStatus st = ht_load(ht, value);
+        expire_init(ht);
         switch (st) {
         case RDB_OK:
           printf("OK\n");
@@ -167,6 +183,20 @@ int main() {
 
     else if (strcmp(argv[0], "COUNT") == 0) {
       printf("(integer) %d\n", ht->count);
+    } else if (strcmp(argv[0], "INFO") == 0) {
+      Info info = ht_info(ht);
+      printf("\nVersion : 0.1\n");
+      printf("Uptime Seconds : %ld\n\n", time(NULL) - start_time);
+
+      printf("Keys : %d\n", info.keys);
+      printf("Keys with TTL : %d\n", info.keys_with_ttl);
+      printf("Expired Keys : %d\n\n", info.expired_keys);
+      // printf("Expired keys deleted : %d\n\n", info.expired_keys);
+
+      printf("Buckets : %d\n", info.buckets);
+      printf("Load Factor : %3f\n", info.load_factor);
+      printf("Resizes : %d\n", info.resizes);
+      printf("Max chain : %d\n", info.max_chain);
     }
 
     else if (strcmp(argv[0], "TTL") == 0) {
