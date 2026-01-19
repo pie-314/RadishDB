@@ -1,3 +1,4 @@
+#include "engine.h"
 #include "aof.h"
 #include "expires.h"
 #include "hashtable.h"
@@ -14,46 +15,76 @@
 
 time_t engine_start_time;
 
-extern time_t engine_start_time;
-void execute_command(HashTable *ht, char *line, FILE *out) {
+Result result_ok(void) {
+  Result r;
+  r.type = RES_OK;
+  return r;
+}
+
+Result result_nil(void) {
+  Result r;
+  r.type = RES_NIL;
+  return r;
+}
+
+Result result_int(long v) {
+  Result r;
+  r.type = RES_INTEGER;
+  r.value.integer = v;
+  return r;
+}
+
+Result result_string(const char *s) {
+  Result r;
+  r.type = RES_STRING;
+  r.value.string = strdup(s);
+  return r;
+}
+
+Result result_error(const char *msg) {
+  Result r;
+  r.type = RES_ERROR;
+  r.value.string = strdup(msg);
+  return r;
+}
+
+Result execute_command(HashTable *ht, char *line) {
 
   // taking input
   trim_newline(line);
   char *argv[MAX_TOKEN];
   int argc = split_tokens(line, argv, MAX_TOKEN);
   if (argc == 0) {
+    return result_nil();
   }
 
   if (strcmp(argv[0], "SET") == 0) {
     if (argc != 3 && argc != 5) {
-      fprintf(out, "(error) wrong number of arguments for 'SET'\n");
-      return;
+      return result_error("(error) wrong number of arguments for 'SET'");
     }
     if (argc == 3) {
       ht_set(ht, argv[1], argv[2], 0);
       aof_append_set(argv[1], argv[2], 0);
-      fprintf(out, "OK\n");
+
+      return result_ok();
     } else if (argc == 5 && (strcmp(argv[3], "EX") == 0)) {
       if (strtol(argv[4], NULL, 10) >= 0) {
         time_t cur_time = time(NULL);
         time_t ttl_expiry = cur_time + (long)strtol(argv[4], NULL, 10);
         ht_set(ht, argv[1], argv[2], ttl_expiry);
         aof_append_set(argv[1], argv[2], argv[4]);
-        fprintf(out, "OK\n");
+        return result_ok();
       }
     }
   }
 
   else if (strcmp(argv[0], "BENCH") == 0) {
     if (argc != 2) {
-      printf("(error) wrong number of arguments for 'BENCH'\n");
-
-      return;
+      return result_error("(error) wrong number of arguments for 'BENCH'");
     }
     int n = atoi(argv[1]);
     if (n <= 0) {
-      fprintf(out, "(error) invalid number\n");
-      return;
+      return result_error("(error) invalid number");
     }
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
@@ -67,37 +98,38 @@ void execute_command(HashTable *ht, char *line, FILE *out) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     double elapsed =
         (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-    fprintf(out, "Inserted %d entries in %.2f seconds.\n", n, elapsed);
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "Inserted %d entries in %.2f seconds.", n,
+             elapsed);
+    return result_string(buffer);
   }
 
   else if (strcmp(argv[0], "DEL") == 0) {
     if (argc != 2) {
-      fprintf(out, "(error) wrong number of arguments for 'DEL'\n");
-      return;
+      return result_error("(error) wrong number of arguments for 'DEL'");
     }
     int value = ht_delete(ht, argv[1]);
     if (value)
-      fprintf(out, "%d\n", value);
+      return result_int(value);
     else
-      fprintf(out, "(nil)\n");
+      return result_nil();
   }
 
   else if (strcmp(argv[0], "GET") == 0) {
     if (argc != 2) {
-      fprintf(out, "(error) wrong number of arguments for 'GET'\n");
-      return;
+      return result_error("(error) wrong number of arguments for 'GET'");
     }
 
     char *value = ht_get(ht, argv[1]);
     if (value)
-      fprintf(out, "%s\n", value);
+      return result_string(value);
     else
-      fprintf(out, "(nil)\n");
+      return result_nil();
   }
 
   else if (strcmp(argv[0], "SAVE") == 0) {
     if (argc != 2) {
-      fprintf(out, "(error) wrong number of arguments for 'SAVE'\n");
+      return result_error("(error) wrong number of arguments for 'SAVE'");
     }
     char filename[256];
 
@@ -107,14 +139,14 @@ void execute_command(HashTable *ht, char *line, FILE *out) {
       snprintf(filename, sizeof(filename), "%s.rdbx", argv[1]);
 
     if (ht_save(ht, filename)) {
-      fprintf(out, "OK\n");
+      return result_ok();
     } else
-      fprintf(out, "(error) could not write file\n");
+      return result_error("(error) could not write file");
   }
 
   else if (strcmp(argv[0], "LOAD") == 0) {
     if (argc != 2) {
-      fprintf(out, "(error) wrong number of arguments for 'LOAD'\n");
+      return result_error("(error) wrong number of arguments for 'LOAD'");
     }
 
     char *value = argv[1];
@@ -123,60 +155,64 @@ void execute_command(HashTable *ht, char *line, FILE *out) {
       expire_init(ht);
       switch (st) {
       case RDB_OK:
-        fprintf(out, "OK\n");
+        return result_ok();
         break;
       case RDB_ERR_OPEN:
-        fprintf(out, "(error) could not open file\n");
+        return result_error("(error) could not open file");
         break;
       case RDB_ERR_MAGIC:
-        fprintf(out, "(error) invalid RDBX file\n");
+        return result_error("(error) invalid RDBX file");
         break;
       default:
-        fprintf(out, "(error) load failed\n");
+        return result_error("(error) load failed");
       }
     } else
-      fprintf(out, "(nil)\n");
+      return result_nil();
   }
 
   else if (strcmp(argv[0], "COUNT") == 0) {
-    fprintf(out, "(integer) %d\n", ht->count);
+    return result_int(ht->count);
   }
 
   else if (strcmp(argv[0], "INFO") == 0) {
     Info info = ht_info(ht);
-    fprintf(out, "\nVersion : 0.1\n");
-    fprintf(out, "Uptime Seconds : %ld\n\n", time(NULL) - engine_start_time);
 
-    fprintf(out, "Keys : %d\n", info.keys);
-    fprintf(out, "Keys with TTL : %d\n", info.keys_with_ttl);
-    fprintf(out, "Expired Keys : %d\n\n", info.expired_keys);
-    // printf("Expired keys deleted : %d\n\n", info.expired_keys);
+    char buffer[512];
+    snprintf(
+        buffer, sizeof(buffer),
+        "Version : 0.1\nUptime Seconds :%ld\n\nKeys : %d\nKeys with TTL : "
+        "%d\nExpired keys : %d\n\nBuckets : %d\nLoad Factor : %3f\nResizes "
+        ": %d\nMax chain : %d\n",
+        time(NULL) - engine_start_time, info.keys, info.keys_with_ttl,
+        info.expired_keys, info.buckets, info.load_factor, info.resizes,
+        info.max_chain);
 
-    fprintf(out, "Buckets : %d\n", info.buckets);
-    fprintf(out, "Load Factor : %3f\n", info.load_factor);
-    fprintf(out, "Resizes : %d\n", info.resizes);
-    fprintf(out, "Max chain : %d\n", info.max_chain);
+    return result_string(buffer);
   }
 
   else if (strcmp(argv[0], "TTL") == 0) {
     if (argc != 2) {
-      fprintf(out, "(error) wrong number of arguments for 'TTL'\n");
-      return;
+      return result_error("(error) wrong number of arguments for 'TTL'");
     }
     long val = ht_ttl(ht, argv[1]);
-    fprintf(out, "(staus) %ld\n", val);
+    return result_int(val);
   }
 
   else if (strcmp(argv[0], "CLEAR") == 0) {
     if (argc != 1) {
-      fprintf(out, "(error) wrong number of arguments for 'TTL'\n");
-      return;
+      return result_error("(error) wrong number of arguments for 'CLEAR'");
     }
-
-    system("clear");
+    return result_string("clean");
   }
 
   else {
-    fprintf(out, "(error) Unknown command. \n");
+    return result_error("(error) Unknown command.");
+  }
+  return result_nil();
+}
+
+void free_result(Result *r) {
+  if ((r->type == RES_STRING || r->type == RES_ERROR) && r->value.string) {
+    free(r->value.string);
   }
 }

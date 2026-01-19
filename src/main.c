@@ -2,6 +2,7 @@
 #include "engine.h"
 #include "expires.h"
 #include "hashtable.h"
+#include "repl.h"
 #include "utils.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -18,7 +19,6 @@ int main() {
   HashTable *ht = ht_create(8);
 
   expire_init(ht);
-  char input[MAX_INPUT];
 
   // to clear screen before starting the REPL
   system("clear");
@@ -41,26 +41,8 @@ int main() {
 
   system("clear");
 
-  // REPL loop
-  while (1) {
-    expire_sweep(ht, 10);
-
-    size_t aof_base_size = aof_header_filesize("aof/radish.aof");
-    aof_size = aof_filesize("aof/radish.aof");
-    if (aof_size > aof_base_size * 2) {
-      printf("[AOF] rewrite (%zu bytes)\n", aof_size);
-      aof_rewrite(ht, "aof/radish.aof");
-      aof_base_size = aof_header_filesize("aof/radish.aof");
-    }
-
-    printf(">>> ");
-    fflush(stdout);
-
-    if (!fgets(input, MAX_INPUT, stdin)) {
-      break;
-    }
-    execute_command(ht, input, stdout);
-  }
+  // REPL loop call
+  repl_loop(ht, aof_size);
 
   return 0;
 }
