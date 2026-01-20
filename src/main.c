@@ -3,6 +3,7 @@
 #include "expires.h"
 #include "hashtable.h"
 #include "repl.h"
+#include "server.h"
 #include "utils.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -13,8 +14,7 @@
 #define MAX_INPUT 256
 #define MAX_TOKEN 8 // at max 3 is getting used for now
 
-int main() {
-
+int main(int argc, char *argv[]) {
   engine_start_time = time(NULL);
   HashTable *ht = ht_create(8);
 
@@ -41,8 +41,22 @@ int main() {
 
   system("clear");
 
-  // REPL loop call
-  repl_loop(ht, aof_size);
+  int server_mode = 0;
 
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--server") == 0) {
+      server_mode = 1;
+      break;
+    }
+  }
+
+  if (server_mode) {
+    // server(ht, aof_size);
+    start_server(ht);
+  } else {
+
+    // REPL loop call
+    repl_loop(ht, aof_size);
+  }
   return 0;
 }

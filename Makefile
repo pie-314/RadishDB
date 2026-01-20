@@ -15,7 +15,9 @@ SRC = \
 	src/expires.c \
 	src/utils.c \
 	src/engine.c \
-	src/repl.c
+	src/repl.c \
+	src/result.c \
+	src/server.c
 
 # Convert src/foo.c -> build/foo.o
 OBJ = $(patsubst src/%.c,$(BUILD)/%.o,$(SRC))

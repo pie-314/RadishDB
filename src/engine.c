@@ -20,6 +20,11 @@ Result result_ok(void) {
   r.type = RES_OK;
   return r;
 }
+Result result_clean(void) {
+  Result r;
+  r.type = RES_CLEAN;
+  return r;
+}
 
 Result result_nil(void) {
   Result r;
@@ -202,7 +207,7 @@ Result execute_command(HashTable *ht, char *line) {
     if (argc != 1) {
       return result_error("(error) wrong number of arguments for 'CLEAR'");
     }
-    return result_string("clean");
+    return result_clean();
   }
 
   else {

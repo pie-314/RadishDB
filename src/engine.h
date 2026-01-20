@@ -4,7 +4,14 @@
 #include <stdio.h>
 #include <time.h>
 
-typedef enum { RES_STRING, RES_OK, RES_ERROR, RES_INTEGER, RES_NIL } ResultType;
+typedef enum {
+  RES_STRING,
+  RES_OK,
+  RES_ERROR,
+  RES_INTEGER,
+  RES_NIL,
+  RES_CLEAN
+} ResultType;
 
 typedef struct Result {
   ResultType type;

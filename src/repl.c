@@ -3,6 +3,7 @@
 #include "engine.h"
 #include "expires.h"
 #include "hashtable.h"
+#include "result.h"
 #include "utils.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -34,27 +35,10 @@ void repl_loop(HashTable *ht, size_t aof_size) {
       break;
     }
     Result engine_return = execute_command(ht, input);
-
-    if (engine_return.type == RES_STRING) {
-      printf("%s\n", engine_return.value.string);
-    }
-
-    else if (engine_return.type == RES_ERROR) {
-      printf("%s\n", engine_return.value.string);
-    }
-
-    else if (engine_return.type == RES_NIL) {
-      printf("(nil)\n");
-    }
-
-    else if (engine_return.type == RES_OK) {
-      printf("OK\n");
-    }
-
-    else if (engine_return.type == RES_INTEGER) {
-      printf("%ld\n", engine_return.value.integer);
+    if (engine_return.type == RES_CLEAN) {
+      system("clear");
     } else {
-      continue;
+      print_result(stdout, &engine_return);
     }
     free_result(&engine_return);
   }
