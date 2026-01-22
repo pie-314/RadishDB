@@ -3,6 +3,7 @@
 *.out
 *.exe
 *.a
+radishdb
 
 # Build outputs
 hashtable
@@ -16,3 +17,5 @@ build/
 # macOS / Linux junk
 .DS_Store
 
+# AOF file
+aof/*.aof

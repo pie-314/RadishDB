@@ -35,7 +35,7 @@ int ht_save(HashTable *ht, const char *filename) {
   return 1;
 }
 
-int ht_load(HashTable *ht, const char *filename) {
+int ht_load(HashTable **ht, const char *filename) {
   FILE *f = fopen(filename, "rb");
   if (!f)
     return RDB_ERR_OPEN;
@@ -49,18 +49,16 @@ int ht_load(HashTable *ht, const char *filename) {
     return RDB_ERR_MAGIC;
   }
 
-  ht_free(ht);
-  ht_create(8);
-
+  if (*ht) {
+    ht_free(*ht);
+  }
+  *ht = ht_create(8);
   uint32_t count;
   fread(&count, sizeof(uint32_t), 1, f);
 
   for (uint32_t i = 0; i < count; i++) {
-
     uint32_t klen;
     fread(&klen, sizeof(uint32_t), 1, f);
-
-    // stack can't be used because we will know length at runtime
     char *key = malloc(klen + 1);
     fread(key, 1, klen, f);
     key[klen] = '\0';
@@ -73,12 +71,13 @@ int ht_load(HashTable *ht, const char *filename) {
 
     time_t expires_at;
     fread(&expires_at, sizeof(time_t), 1, f);
-    ht_set(ht, key, value, expires_at);
 
-    // temp heap cleanup
+    ht_set(*ht, key, value, expires_at);
+
     free(key);
     free(value);
   }
+
   fclose(f);
   return RDB_OK;
 }

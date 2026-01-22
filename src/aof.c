@@ -100,7 +100,7 @@ int aof_replay(HashTable *ht, const char *filename) {
     if (argc > 0) {
       if (strcmp(argv[0], "SET") == 0 && argc >= 3) {
         if (argc == 5 && strcmp(argv[3], "EX") == 0) {
-          time_t expires = (time_t)strtol(argv[4], NULL, 10);
+          time_t expires = time(NULL) + (time_t)strtol(argv[4], NULL, 10);
           ht_set(ht, argv[1], argv[2], expires);
         } else {
           ht_set(ht, argv[1], argv[2], 0);

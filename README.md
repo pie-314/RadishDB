@@ -1,50 +1,61 @@
-# **RadishDB**
+# RadishDB
 
-RadishDB is a **Redis-inspired, in-memory key–value database** written in **C**, built to deeply understand how real databases work internally.
+RadishDB is a **Redis-inspired, in-memory key–value database** written in **C**, built to understand how real databases work internally.
 
-Instead of focusing on UI or frameworks, RadishDB explores **core database internals** such as:
+This project focuses on **storage engine fundamentals**—not frameworks or UI—including:
 
-* storage engine design
 * write-ahead logging (WAL)
 * crash recovery
-* TTL & expiration
+* expiration & TTL
 * log compaction
-* clean engine / protocol separation
+* protocol-agnostic execution
 
-This is a **learning-grade database engine**, but it intentionally follows architectural patterns used in real systems like **Redis, RocksDB, and PostgreSQL**.
+RadishDB is a **learning-grade but architecturally serious** database, following patterns used in Redis, RocksDB, and PostgreSQL.
 
 ---
 
-## **Key Features**
+## Screenshots
 
-### **In-Memory Storage Engine**
+### Interactive REPL
 
-* String → string key–value store
+![RadishDB REPL](screenshots/repl.png)
+
+### TCP Server Mode
+
+![RadishDB Server](screenshots/server.png)
+
+---
+
+## Core Features
+
+### Key–Value Storage
+
+* String → string mapping
 * Hash table with **separate chaining**
 * Automatic resizing (load factor > 0.75)
 * Heap-managed keys and values
-* Safe insert, update, and delete
+* Safe insert, update, delete
 
 ---
 
-### **TTL & Expiration**
+### TTL & Expiration
 
-* Optional per-key expiration timestamps
+* Per-key expiration timestamps
 * Passive expiration on read
 * Active expiration via incremental sweeper
-* Redis-style TTL behavior
+* Redis-style TTL semantics
 
 ---
 
-### **Persistence**
+### Persistence
 
 RadishDB uses **two complementary persistence layers**.
 
-#### **1. Snapshot (.rdbx)**
+#### 1️⃣ Snapshot (`.rdbx`)
 
-A compact binary snapshot representing the full database state.
+Compact binary snapshot of the full database state.
 
-**Format**
+**Format:**
 
 ```
 RDBX1
@@ -57,18 +68,15 @@ repeat:
   [time_t expires_at]
 ```
 
-Used for:
-
-* fast full-state save
-* cold-start recovery
+Used for fast save & restore.
 
 ---
 
-#### **2. Append-Only File (AOF / WAL)**
+#### 2️⃣ Append-Only File (AOF)
 
-A crash-safe **write-ahead log** recording all mutating commands.
+Crash-safe write-ahead log.
 
-**Format**
+**Format:**
 
 ```
 [AOFX1][uint64 base_size]
@@ -77,57 +85,55 @@ A crash-safe **write-ahead log** recording all mutating commands.
 ...
 ```
 
-**Properties**
+**Properties:**
 
-* Binary length-prefixed framing
-* `fsync` on every write
+* Length-prefixed binary framing
+* `fsync()` on every write
 * Deterministic replay on startup
 * Partial writes safely ignored
-* Crash-safe by construction
 
 ---
 
-### **AOF Rewrite (Log Compaction)**
+### AOF Rewrite (Compaction)
 
-RadishDB implements **AOF rewrite** similar to Redis `BGREWRITEAOF`.
+RadishDB implements Redis-style AOF compaction:
 
-Rewrite behavior:
-
-* serializes current in-memory state
-* writes a fresh AOF with a new header
-* discards historical garbage
-* resets growth baseline
+* Serializes current in-memory state
+* Writes a fresh AOF
+* Discards historical garbage
+* Updates growth baseline in header
 
 This guarantees:
 
 * bounded disk growth
-* faster startup
-* long-term durability
+* fast startup
+* crash safety
 
 ---
 
-## **Execution Engine Architecture**
+## Command Engine Architecture
 
 RadishDB is structured around a **protocol-agnostic execution engine**.
 
 ```
-engine.c    → command semantics
-hashtable   → in-memory storage
-expires.c   → TTL & expiration
-aof.c       → durability, replay, rewrite
-result.c    → typed command results
+engine.c   → command semantics
+aof.c      → durability (WAL)
+expires.c  → TTL & expiration
+hashtable  → storage engine
+repl.c     → interactive frontend
+server.c   → TCP frontend
+main.c     → lifecycle & mode selection
 ```
 
-Frontends drive the same engine:
+The same engine powers:
 
-* **REPL** (`repl.c`)
-* **TCP server** (`server.c`)
-
-No command logic is duplicated.
+* REPL
+* TCP server
+* future protocols (RESP, HTTP, etc.)
 
 ---
 
-## **Supported Commands**
+## Supported Commands
 
 ```
 SET key value
@@ -140,12 +146,13 @@ SAVE file
 LOAD file
 BENCH n
 INFO
-CLEAR
+HELP
+EXIT
 ```
 
 ---
 
-## **Example Session**
+## Example Session
 
 ```
 SET name radish
@@ -165,114 +172,89 @@ GET name
 radish
 ```
 
-State is recovered via AOF replay.
+State is recovered from the AOF.
 
 ---
 
-## **REPL & TCP Server**
+## Running RadishDB
 
-RadishDB supports **two execution modes**.
+### Build
 
-### **REPL Mode**
-
+```bash
+make
 ```
+
+### REPL mode
+
+```bash
 ./radishdb
 ```
 
-Interactive shell for local use and debugging.
+### Server mode
 
----
-
-### **Server Mode**
-
-```
+```bash
 ./radishdb --server
 ```
 
-Features:
-
-* TCP server (line-based protocol)
-* Fork-based multi-client handling
-* Shared execution engine with REPL
-* One response per command
-* Can be tested using `nc`
-
-Example:
-
-```
-nc localhost 8080
-SET a 1
-GET a
-```
+Server listens on **port 8080** and accepts one client.
 
 ---
 
-## **Project Structure**
+## Project Structure
 
 ```
 src/
-├── aof.c / aof.h           # WAL, replay, rewrite
-├── engine.c / engine.h    # Command execution engine
-├── expires.c / expires.h  # TTL & expiration
-├── hashtable.c / .h       # Core in-memory storage
-├── persistence.c / .h     # Snapshot (.rdbx)
-├── result.c / result.h    # Typed command results
-├── repl.c / repl.h        # Interactive REPL
-├── server.c / server.h    # TCP server frontend
-├── utils.c / utils.h      # Tokenization & helpers
-└── main.c                 # Startup & lifecycle
+├── engine.c        # Command execution engine
+├── aof.c           # WAL + replay + rewrite
+├── expires.c       # TTL & expiration
+├── hashtable.c    # Core storage
+├── persistence.c  # Snapshot (.rdbx)
+├── repl.c         # Interactive shell
+├── server.c       # TCP server
+├── result.c       # Output formatting
+├── utils.c        # Helpers
 ```
 
-Build artifacts live in `build/`.
+Other files:
+
+* `ARCHITECTURE.md` – design decisions
+* `LEARNINGS.md` – what was learned
+* `screenshots/` – REPL & server demos
 
 ---
 
-## **Build & Run**
+## Why RadishDB Is Interesting
 
-```sh
-make
-./radishdb
-```
-
----
-
-## **Why RadishDB Is Interesting**
-
-RadishDB implements the **hard parts** of real databases:
+RadishDB implements **real database internals**, not toy abstractions:
 
 * write-ahead logging
 * crash recovery
 * deterministic replay
 * TTL correctness
 * log compaction
-* format versioning
 * engine / protocol separation
 
-These are the same foundations used by Redis, RocksDB, PostgreSQL WAL, and Elasticsearch.
+These are the same problems solved in Redis, RocksDB, PostgreSQL WAL, and Elasticsearch.
 
 ---
 
-## **Roadmap**
+## Status
 
-Planned future work:
+**v0.1.0 – Stable learning release**
 
-* RESP-like protocol
-* Shared-memory or event-driven server
-* Typed values (beyond strings)
-* Range & prefix scans
-* Eviction policies
-* Disk-backed data structures
-* Transactions
+RadishDB v0.1 represents a **completed storage engine**.
+Further work would focus on extensions rather than core correctness.
 
 ---
 
-## **License**
+## License
 
 MIT
 
 ---
 
-## **Author**
+## Author
 
-RadishDB is a **systems-learning project** built to understand database internals, memory ownership, persistence, and crash safety in C.
+Built as a **systems-learning project** to understand databases from memory to disk to crash recovery.
+
 

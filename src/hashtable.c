@@ -171,6 +171,7 @@ int ht_delete(HashTable *ht, const char *key) {
       free(entry->value);
       free(entry->key);
       free(entry);
+      ht->count--;
       return 1;
     }
     prev = entry;

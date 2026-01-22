@@ -10,6 +10,6 @@ typedef enum {
 } RdbStatus;
 
 int ht_save(HashTable *ht, const char *filename);
-int ht_load(HashTable *ht, const char *filename);
+int ht_load(HashTable **ht, const char *filename);
 
 #endif
