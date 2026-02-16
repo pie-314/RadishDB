@@ -1,14 +1,18 @@
 # RadishDB
 
-RadishDB is a **Redis-inspired, in-memory key–value database** written in **C**, built to understand how real databases work internally.
+RadishDB is a **Redis-inspired, in-memory key–value database** written in **C**, built to understand how real databases work internally and how to deploy them like production services.
 
-This project focuses on **storage engine fundamentals**—not frameworks or UI—including:
+RadishDB implements real storage engine internals and is fully **containerized and deployable using Docker and Docker Compose**.
+
+This project focuses on:
 
 * write-ahead logging (WAL)
 * crash recovery
 * expiration & TTL
 * log compaction
-* protocol-agnostic execution
+* persistent storage
+* containerized deployment (Docker)
+* service orchestration (docker-compose)
 
 RadishDB is a **learning-grade but architecturally serious** database, following patterns used in Redis, RocksDB, and PostgreSQL.
 
@@ -26,114 +30,93 @@ RadishDB is a **learning-grade but architecturally serious** database, following
 
 ---
 
-## Core Features
+# Core Features
 
-### Key–Value Storage
+## Key–Value Storage
 
 * String → string mapping
-* Hash table with **separate chaining**
-* Automatic resizing (load factor > 0.75)
-* Heap-managed keys and values
+* Hash table with separate chaining
+* Automatic resizing
+* Heap-managed memory
 * Safe insert, update, delete
 
 ---
 
-### TTL & Expiration
+## TTL & Expiration
 
 * Per-key expiration timestamps
 * Passive expiration on read
-* Active expiration via incremental sweeper
+* Active expiration via sweeper
 * Redis-style TTL semantics
 
 ---
 
-### Persistence
+## Persistence
 
-RadishDB uses **two complementary persistence layers**.
+RadishDB uses two persistence layers.
 
-#### 1️⃣ Snapshot (`.rdbx`)
+### Snapshot (.rdbx)
 
-Compact binary snapshot of the full database state.
+Binary snapshot of full database state.
 
-**Format:**
-
-```
-RDBX1
-[uint32 key_count]
-repeat:
-  [uint32 key_len]
-  [key bytes]
-  [uint32 value_len]
-  [value bytes]
-  [time_t expires_at]
-```
-
-Used for fast save & restore.
+Used for fast save and restore.
 
 ---
 
-#### 2️⃣ Append-Only File (AOF)
+### Append-Only File (AOF)
 
 Crash-safe write-ahead log.
 
-**Format:**
+Features:
 
-```
-[AOFX1][uint64 base_size]
-[uint32 len][ASCII command]
-[uint32 len][ASCII command]
-...
-```
-
-**Properties:**
-
-* Length-prefixed binary framing
-* `fsync()` on every write
-* Deterministic replay on startup
-* Partial writes safely ignored
+* deterministic replay
+* fsync durability
+* partial write protection
+* crash recovery
 
 ---
 
-### AOF Rewrite (Compaction)
+## AOF Rewrite (Log Compaction)
 
-RadishDB implements Redis-style AOF compaction:
+RadishDB implements log compaction:
 
-* Serializes current in-memory state
-* Writes a fresh AOF
-* Discards historical garbage
-* Updates growth baseline in header
+* serializes current state
+* writes new compact log
+* removes obsolete history
 
-This guarantees:
+This ensures:
 
-* bounded disk growth
+* bounded disk usage
 * fast startup
 * crash safety
 
 ---
 
-## Command Engine Architecture
+# Architecture
 
-RadishDB is structured around a **protocol-agnostic execution engine**.
+RadishDB is built as a protocol-agnostic execution engine.
 
 ```
-engine.c   → command semantics
-aof.c      → durability (WAL)
-expires.c  → TTL & expiration
-hashtable  → storage engine
-repl.c     → interactive frontend
-server.c   → TCP frontend
-main.c     → lifecycle & mode selection
+engine.c      → command semantics
+hashtable.c   → storage engine
+aof.c         → durability
+expires.c     → TTL system
+persistence.c → snapshots
+repl.c        → interactive mode
+server.c      → TCP server
+main.c        → lifecycle
 ```
 
-The same engine powers:
+This separation allows multiple frontends:
 
 * REPL
 * TCP server
-* future protocols (RESP, HTTP, etc.)
+* container deployment
+* future protocols
 
 ---
 
-## Supported Commands
+# Supported Commands
 
 ```
 SET key value
@@ -152,15 +135,18 @@ EXIT
 
 ---
 
-## Example Session
+# Example Session
 
 ```
 SET name radish
 OK
-SET color red EX 10
-OK
+
 GET name
 radish
+
+SET color red EX 10
+OK
+
 TTL color
 7
 ```
@@ -172,89 +158,225 @@ GET name
 radish
 ```
 
-State is recovered from the AOF.
+State recovered from AOF.
 
 ---
 
-## Running RadishDB
+# Build and Run (Native)
 
-### Build
+Build:
 
 ```bash
 make
 ```
 
-### REPL mode
+REPL mode:
 
 ```bash
 ./radishdb
 ```
 
-### Server mode
+Server mode:
 
 ```bash
 ./radishdb --server
 ```
 
-Server listens on **port 8080** and accepts one client.
+Server listens on port 6379.
 
 ---
 
-## Project Structure
+# Run Using Docker (Recommended)
+
+RadishDB is published on Docker Hub.
+
+Pull image:
+
+```bash
+docker pull piee314/radishdb:latest
+```
+
+Run container:
+
+```bash
+docker run -d \
+  --name radishdb \
+  -p 6379:6379 \
+  -v radish-data:/app/aof \
+  piee314/radishdb:latest
+```
+
+This starts RadishDB with:
+
+* persistent storage
+* exposed network port
+* isolated container runtime
+
+---
+
+# Persistence
+
+RadishDB stores data in:
+
+```
+/app/aof/radish.aof
+```
+
+Docker volume ensures data persists across container restarts.
+
+List volumes:
+
+```bash
+docker volume ls
+```
+
+Inspect volume:
+
+```bash
+docker volume inspect radish-data
+```
+
+---
+
+# Run Using Docker Compose
+
+docker-compose.yml:
+
+```yaml
+version: "3.8"
+
+services:
+  radishdb:
+    image: piee314/radishdb:latest
+    container_name: radishdb
+    ports:
+      - "6379:6379"
+    volumes:
+      - radish-data:/app/aof
+    restart: unless-stopped
+
+volumes:
+  radish-data:
+```
+
+Start service:
+
+```bash
+docker-compose up -d
+```
+
+Stop service:
+
+```bash
+docker-compose down
+```
+
+View logs:
+
+```bash
+docker-compose logs
+```
+
+---
+
+# Container Architecture
+
+RadishDB uses multi-stage Docker build:
+
+```
+build stage → compile binary
+runtime stage → minimal Linux container
+volume mount → persistent storage
+```
+
+Benefits:
+
+* small image size
+* fast startup
+* production-ready deployment
+
+---
+
+# DevOps Features Demonstrated
+
+RadishDB demonstrates real DevOps practices:
+
+* Docker containerization
+* multi-stage builds
+* persistent volumes
+* Docker Hub image publishing
+* docker-compose orchestration
+* reproducible deployments
+
+RadishDB can run identically on:
+
+* local machine
+* cloud servers
+* CI/CD pipelines
+* container orchestration platforms
+
+---
+
+# Project Structure
 
 ```
 src/
-├── engine.c        # Command execution engine
-├── aof.c           # WAL + replay + rewrite
-├── expires.c       # TTL & expiration
-├── hashtable.c    # Core storage
-├── persistence.c  # Snapshot (.rdbx)
-├── repl.c         # Interactive shell
-├── server.c       # TCP server
-├── result.c       # Output formatting
-├── utils.c        # Helpers
+├── engine.c
+├── hashtable.c
+├── aof.c
+├── expires.c
+├── persistence.c
+├── repl.c
+├── server.c
+├── result.c
+├── utils.c
+
+Dockerfile
+docker-compose.yml
+Makefile
+README.md
+ARCHITECTURE.md
+LEARNINGS.md
 ```
 
-Other files:
+---
 
-* `ARCHITECTURE.md` – design decisions
-* `LEARNINGS.md` – what was learned
-* `screenshots/` – REPL & server demos
+# Deployment Example (Cloud Server)
+
+On any Linux server:
+
+```bash
+docker run -d \
+  -p 6379:6379 \
+  -v radish-data:/app/aof \
+  piee314/radishdb:latest
+```
+
+RadishDB runs remotely and persists data.
 
 ---
 
-## Why RadishDB Is Interesting
+# Status
 
-RadishDB implements **real database internals**, not toy abstractions:
+Stable learning release.
 
-* write-ahead logging
+Fully functional storage engine with persistent container deployment.
+
+---
+
+# License
+
+MIT License
+
+---
+
+# Author
+
+Built as a systems engineering and DevOps learning project to understand:
+
+* database internals
 * crash recovery
-* deterministic replay
-* TTL correctness
-* log compaction
-* engine / protocol separation
-
-These are the same problems solved in Redis, RocksDB, PostgreSQL WAL, and Elasticsearch.
-
----
-
-## Status
-
-**v0.1.0 – Stable learning release**
-
-RadishDB v0.1 represents a **completed storage engine**.
-Further work would focus on extensions rather than core correctness.
-
----
-
-## License
-
-MIT
-
----
-
-## Author
-
-Built as a **systems-learning project** to understand databases from memory to disk to crash recovery.
-
+* persistence
+* containerization
+* deployment workflows
 

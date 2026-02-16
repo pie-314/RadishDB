@@ -17,11 +17,13 @@
 
 void repl_loop(HashTable *ht, size_t aof_size) {
   char input[MAX_INPUT];
+
   while (1) {
     expire_sweep(ht, 10);
 
     size_t aof_base_size = aof_header_filesize("aof/radish.aof");
     aof_size = aof_filesize("aof/radish.aof");
+
     if (aof_size > aof_base_size * 2) {
       printf("[AOF] rewrite (%zu bytes)\n", aof_size);
       aof_rewrite(ht, "aof/radish.aof");
@@ -32,14 +34,24 @@ void repl_loop(HashTable *ht, size_t aof_size) {
     fflush(stdout);
 
     if (!fgets(input, MAX_INPUT, stdin)) {
+      printf("\n");
       break;
     }
+
     Result engine_return = execute_command(ht, input);
+
+    if (engine_return.type == RES_EXIT) {
+      printf("Bye!\n");
+      free_result(&engine_return);
+      break;
+    }
+
     if (engine_return.type == RES_CLEAN) {
       system("clear");
     } else {
       print_result(stdout, &engine_return);
     }
+
     free_result(&engine_return);
   }
 }

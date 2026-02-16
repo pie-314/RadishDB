@@ -10,7 +10,8 @@ typedef enum {
   RES_ERROR,
   RES_INTEGER,
   RES_NIL,
-  RES_CLEAN
+  RES_CLEAN,
+  RES_EXIT
 } ResultType;
 
 typedef struct Result {

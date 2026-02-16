@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  radishdb:
+    build: .
+    container_name: radishdb
+    ports:
+      - "6379:6379"
+    volumes:
+      - radish-data:/app/aof
+    restart: unless-stopped
+
+volumes:
+  radish-data:
+

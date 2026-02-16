@@ -45,6 +45,11 @@ Result result_string(const char *s) {
   r.value.string = strdup(s);
   return r;
 }
+Result result_exit(void) {
+  Result r;
+  r.type = RES_EXIT;
+  return r;
+}
 
 Result result_error(const char *msg) {
   Result r;
@@ -253,6 +258,11 @@ Result execute_command(HashTable *ht, char *line) {
         "\n"
         "HELP\n"
         "  Show this help message.\n");
+  } else if (strcmp(argv[0], "EXIT") == 0 || strcmp(argv[0], "QUIT") == 0) {
+    if (argc != 1) {
+      return result_error("(error) wrong number of arguments for 'EXIT'");
+    }
+    return result_exit();
   }
 
   else if (strcmp(argv[0], "CLEAR") == 0) {

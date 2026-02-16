@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define PORT 8080
+#define PORT 6379
 #define MAX_INPUT 256
 
 void start_server(HashTable *ht) {
